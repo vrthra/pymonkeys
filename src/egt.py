@@ -14,37 +14,66 @@ def parse_source(source):
     src = slurp(source) 
     return parse(src)
 
+def prologue_tmpl():
+    tmpl = """
+    import os
+    import signal
+    import Pyro4
+
+    egt_uri = ""
+    with open(".uri", "r") as x: egt_uri = x.read()
+    print egt_uri
+
+    egt_constraints = Pyro4.Proxy(egt_uri)
+
+    egt_defined_vars = {}
+    egt_pids = []
+    egt_children = []
+    egt_path = ''
+    """
+    return dedent(tmpl)
+
+def epilogue_tmpl():
+    tmpl = """
+    for i in egt_children:
+      print "wait child %i" % i
+      os.waitpid(i, 0)
+    """
+    return dedent(tmpl)
+
 
 def if_tmpl(cond, body, orelse):
     tmpl = """
     pid = os.fork()
-    # get all variables in constraints and make sure that the labels are correct
-    # from defined_vars
+    # get all variables in egt_constraints and make sure that the labels are correct
+    # from egt_defined_vars
     if pid == 0:
-        constraints.add("cond")
+        egt_constraints.append(os.getpid(), pid, "cond")
+        egt_pids.append(os.getpid())
         body
     else:
-        constraints.add("notcond")
+        egt_constraints.append(os.getpid(), pid, "notcond")
+        egt_children.append(pid)
         orelse
     """
     ast = parse(dedent(tmpl))
-    ast.body[1].body[1] = body
-    ast.body[1].body[0].value.args[0].s = astunparse.unparse(cond).strip()
-    ast.body[1].orelse[1] = orelse
-    ast.body[1].orelse[0].value.args[0].s = astunparse.unparse(cond).strip()
+    ast.body[1].body[2] = body
+    ast.body[1].body[0].value.args[2].s = astunparse.unparse(cond).strip()
+    ast.body[1].orelse[2] = orelse
+    ast.body[1].orelse[0].value.args[2].s =  "not " + astunparse.unparse(cond).strip()
     return ast
 
 
 def assign_tmpl(target, value):
     # Make sure that the target is suitably renamed.
-    # make sure that defined_vars are reinitialized at the start of each block
+    # make sure that egt_defined_vars are reinitialized at the start of each block
     """
     newvar = 1
-    if (target in keys(defined_vars)):
-       newvar = defined_vars[target] + 1
-    defined_vars[target] = newvar
+    if (target in keys(egt_defined_vars)):
+       newvar = egt_defined_vars[target] + 1
+    egt_defined_vars[target] = newvar
     target_label = target + ':' + newvar
-    constraints.add("target_label == v")
+    egt_constraints.append("target_label == v")
     """
 
 def loop_tmpl(cond, body, orelse):
@@ -81,8 +110,7 @@ def transform(tree):
 def main():
     tree = parse_source(sys.argv[1])
     #print astunparse.dump(tree)
-    print "-------"
-    print astunparse.unparse(transform(tree))
+    print prologue_tmpl() + astunparse.unparse(transform(tree)) + epilogue_tmpl()
     #print dump(transform(tree))
 
 main()
