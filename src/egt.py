@@ -6,13 +6,7 @@ from ast import *
 import astunparse
 
 def slurp(src):
-    with open(src) as x:
-        f = x.read()
-        return f
-
-def parse_source(source):
-    src = slurp(source) 
-    return parse(src)
+    with open(src) as x: return x.read()
 
 def prologue_tmpl():
     tmpl = """
@@ -21,6 +15,7 @@ def prologue_tmpl():
     class EgtConstraints:
         def __init__(self):
             self.constraints = []
+
         def append(self, cond):
             self.constraints.append(cond)
 
@@ -30,9 +25,7 @@ def prologue_tmpl():
     egt_constraints = EgtConstraints()
 
     egt_defined_vars = {}
-    egt_pids = []
     egt_children = []
-    egt_path = ''
 
     def on_child(ppid, pid, cond):
         global egt_constraints
@@ -50,15 +43,11 @@ def prologue_tmpl():
     return dedent(tmpl)
 
 def epilogue_tmpl():
-    tmpl = '''
-    with open(".pids/%d" % os.getpid(), "w+") as f:
-        f.write(egt_constraints.show())
-        f.write("\\n")
+    tmpl = """
+    with open(".pids/%d" % os.getpid(), "w+") as f: f.write(egt_constraints.show())
     for i in egt_children:
-        if i != os.getpid():
-          print "wait child %i" % i
-          os.waitpid(i, 0)
-    '''
+        if i != os.getpid(): os.waitpid(i, 0)
+    """
     return dedent(tmpl)
 
 
@@ -128,7 +117,7 @@ def transform(tree):
     return EgtTransformer().visit(tree)
 
 def main():
-    tree = parse_source(sys.argv[1])
+    tree = parse(slurp(sys.argv[1]))
     #print astunparse.dump(tree)
     print prologue_tmpl() + astunparse.unparse(transform(tree)) + epilogue_tmpl()
     #print dump(transform(tree))
