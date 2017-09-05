@@ -45,8 +45,7 @@ def prologue_tmpl():
 def epilogue_tmpl():
     tmpl = """
     with open(".pids/%d" % os.getpid(), "w+") as f: f.write(egt_constraints.show())
-    for i in egt_children:
-        if i != os.getpid(): os.waitpid(i, 0)
+    for i in egt_children: os.waitpid(i, 0)
     """
     return dedent(tmpl)
 
