@@ -38,7 +38,7 @@ def prologue_tmpl():
     egt_children = []
     egt_mypid = os.getpid()
 
-    def on_child(cond):
+    def egt_on_child(cond):
         global egt_constraints
         global egt_children
         global egt_mypid
@@ -46,7 +46,7 @@ def prologue_tmpl():
         egt_constraints.append(cond)
         del egt_children[:]
 
-    def on_parent(pid, cond):
+    def egt_on_parent(pid, cond):
         global egt_constraints
         global egt_children
         egt_constraints.append(cond)
@@ -74,10 +74,10 @@ def if_tmpl(cond, body, orelse):
     # get all variables in egt_constraints and make sure that the labels are correct
     # from egt_defined_vars
     if pid == 0:
-        on_child("cond")
+        egt_on_child("cond")
         body
     else:
-        on_parent(pid, "cond")
+        egt_on_parent(pid, "cond")
         orelse
     """
     myast = parse(dedent(tmpl))
