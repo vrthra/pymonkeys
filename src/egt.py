@@ -26,14 +26,17 @@ def prologue_tmpl():
 
     egt_defined_vars = {}
     egt_children = []
+    egt_mypid = os.getpid()
 
-    def on_child(ppid, pid, cond):
+    def on_child(cond):
         global egt_constraints
         global egt_children
+        global egt_mypid
+        egt_mypid = os.getpid()
         egt_constraints.append(cond)
         del egt_children[:]
 
-    def on_parent(ppid, pid, cond):
+    def on_parent(pid, cond):
         global egt_constraints
         global egt_children
         egt_constraints.append(cond)
@@ -44,30 +47,30 @@ def prologue_tmpl():
 
 def epilogue_tmpl():
     tmpl = """
-    with open(".pids/%d" % os.getpid(), "w+") as f: f.write(egt_constraints.show())
-    for i in egt_children: os.waitpid(i, 0)
+    with open(".pids/%d" % egt_mypid, "w+") as f: f.write(egt_constraints.show())
+    for pid in egt_children: os.waitpid(pid, 0)
     """
     return dedent(tmpl)
 
 
 def if_tmpl(cond, body, orelse):
     tmpl = """
-    parentpid = os.getpid()
+    parentpid = egt_mypid
     pid = os.fork()
     # get all variables in egt_constraints and make sure that the labels are correct
     # from egt_defined_vars
     if pid == 0:
-        on_child(parentpid, os.getpid(), "cond")
+        on_child("cond")
         body
     else:
-        on_parent(parentpid, pid, "cond")
+        on_parent(pid, "cond")
         orelse
     """
     myast = parse(dedent(tmpl))
     myast.body[2].body[1] = body
-    myast.body[2].body[0].value.args[2].s = astunparse.unparse(cond).strip()
+    myast.body[2].body[0].value.args[0].s = astunparse.unparse(cond).strip()
     myast.body[2].orelse[1] = orelse
-    myast.body[2].orelse[0].value.args[2].s =  "not " + astunparse.unparse(cond).strip()
+    myast.body[2].orelse[0].value.args[1].s =  "not " + astunparse.unparse(cond).strip()
     return fix_missing_locations(myast)
 
 
