@@ -43,13 +43,13 @@ def prologue_tmpl():
         global egt_children
         global egt_mypid
         egt_mypid = os.getpid()
-        egt_constraints.append(cond)
+        egt_constraints.append(egt_update_vars(cond))
         del egt_children[:]
 
     def egt_on_parent(pid, cond):
         global egt_constraints
         global egt_children
-        egt_constraints.append(cond)
+        egt_constraints.append(egt_update_vars(cond))
         egt_children.append(pid)
 
 
