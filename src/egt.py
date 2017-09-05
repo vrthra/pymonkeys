@@ -18,13 +18,16 @@ def prologue_tmpl():
     tmpl = """
     import os
     import signal
-    import Pyro4
+    class EgtConstraints:
+        def __init__(self):
+            self.constraints = []
+        def append(self, cond):
+            self.constraints.append(cond)
 
-    egt_uri = ""
-    with open(".uri", "r") as x: egt_uri = x.read()
-    print egt_uri
+        def show(self):
+            return " ".join(self.constraints)
 
-    egt_constraints = Pyro4.Proxy(egt_uri)
+    egt_constraints = EgtConstraints()
 
     egt_defined_vars = {}
     egt_pids = []
@@ -33,46 +36,50 @@ def prologue_tmpl():
 
     def on_child(ppid, pid, cond):
         global egt_constraints
-        global egt_pids
-        egt_constraints.append(ppid, pid, cond)
+        global egt_children
+        egt_constraints.append(cond)
         del egt_children[:]
 
     def on_parent(ppid, pid, cond):
         global egt_constraints
         global egt_children
-        egt_constraints.append(ppid, pid, cond)
+        egt_constraints.append(cond)
         egt_children.append(pid)
 
     """
     return dedent(tmpl)
 
 def epilogue_tmpl():
-    tmpl = """
+    tmpl = '''
+    with open(".pids/%d" % os.getpid(), "w+") as f:
+        f.write(egt_constraints.show())
+        f.write("\\n")
     for i in egt_children:
         if i != os.getpid():
           print "wait child %i" % i
           os.waitpid(i, 0)
-    """
+    '''
     return dedent(tmpl)
 
 
 def if_tmpl(cond, body, orelse):
     tmpl = """
+    parentpid = os.getpid()
     pid = os.fork()
     # get all variables in egt_constraints and make sure that the labels are correct
     # from egt_defined_vars
     if pid == 0:
-        on_child(os.getpid(), pid, "cond")
+        on_child(parentpid, os.getpid(), "cond")
         body
     else:
-        on_parent(os.getpid(), pid, "cond")
+        on_parent(parentpid, pid, "cond")
         orelse
     """
     myast = parse(dedent(tmpl))
-    myast.body[1].body[1] = body
-    myast.body[1].body[0].value.args[2].s = astunparse.unparse(cond).strip()
-    myast.body[1].orelse[1] = orelse
-    myast.body[1].orelse[0].value.args[2].s =  "not " + astunparse.unparse(cond).strip()
+    myast.body[2].body[1] = body
+    myast.body[2].body[0].value.args[2].s = astunparse.unparse(cond).strip()
+    myast.body[2].orelse[1] = orelse
+    myast.body[2].orelse[0].value.args[2].s =  "not " + astunparse.unparse(cond).strip()
     return fix_missing_locations(myast)
 
 
