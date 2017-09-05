@@ -25,7 +25,7 @@ def prologue_tmpl():
             self.constraints.append(cond)
 
         def show(self):
-            return " ".join(self.constraints)
+            return " & ".join(self.constraints)
 
     egt_constraints = EgtConstraints()
 
