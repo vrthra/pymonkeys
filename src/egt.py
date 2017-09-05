@@ -11,6 +11,8 @@ def slurp(src):
 def prologue_tmpl():
     tmpl = """
     import os
+    import ast
+    import astunparse
     import signal
     class EgtConstraints:
         def __init__(self):
@@ -21,6 +23,14 @@ def prologue_tmpl():
 
         def show(self):
             return " & ".join(self.constraints)
+
+    class UpdateNameTransformer(ast.NodeTransformer):
+        def visit_Name(self, node):
+            #print astunparse.unparse(node)
+            #print "------"
+            if node.id in egt_defined_vars:
+                node.id = "%s:%d" % (node.id, egt_defined_vars[node.id])
+            return node
 
     egt_constraints = EgtConstraints()
 
@@ -42,6 +52,10 @@ def prologue_tmpl():
         egt_constraints.append(cond)
         egt_children.append(pid)
 
+
+    def egt_update_vars(src):
+        value = ast.parse(src)
+        return astunparse.unparse(UpdateNameTransformer().visit(value)).strip()
     """
     return dedent(tmpl)
 
@@ -73,18 +87,23 @@ def if_tmpl(cond, body, orelse):
     myast.body[2].orelse[0].value.args[1].s =  "not " + astunparse.unparse(cond).strip()
     return fix_missing_locations(myast)
 
-
 def assign_tmpl(target, value):
     # Make sure that the target is suitably renamed.
     # make sure that egt_defined_vars are reinitialized at the start of each block
-    """
+    target_name = target.id
+
+    tmpl = """
     newvar = 1
-    if (target in keys(egt_defined_vars)):
-       newvar = egt_defined_vars[target] + 1
-    egt_defined_vars[target] = newvar
-    target_label = target + ':' + newvar
-    egt_constraints.append("target_label == v")
-    """
+    egt_target = '{target_name}'
+    if (egt_target in egt_defined_vars.keys()): newvar = egt_defined_vars[egt_target] + 1
+    egt_target_value = egt_update_vars('{target_value}')
+    egt_defined_vars[egt_target] = newvar
+    egt_target_label = egt_target + ':' + str(newvar)
+    egt_constraints.append(egt_target_label + " == " + egt_target_value)
+    """.format(target_name=target_name,
+         target_value = astunparse.unparse(value).strip())
+    myast = parse(dedent(tmpl))
+    return fix_missing_locations(myast)
 
 def loop_tmpl(cond, body, orelse):
     """
@@ -107,13 +126,10 @@ class EgtTransformer(NodeTransformer):
         newnode = if_tmpl(ifcond, ifbody, elbody)
         return newnode
 
-class RewriteName(NodeTransformer):
-    def visit_Name(self, node):
-        return copy_location(Subscript(
-            value=Name(id='data', ctx=Load()),
-            slice=Index(value=Str(s=node.id)),
-            ctx=node.ctx
-        ), node)
+    def visit_Assign(self, node):
+        self.generic_visit(node)
+        newnode = assign_tmpl(node.targets[0], node.value)
+        return newnode
 
 def transform(tree):
     return EgtTransformer().visit(tree)
