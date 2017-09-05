@@ -30,14 +30,28 @@ def prologue_tmpl():
     egt_pids = []
     egt_children = []
     egt_path = ''
+
+    def on_child(ppid, pid, cond):
+        global egt_constraints
+        global egt_pids
+        egt_constraints.append(ppid, pid, cond)
+        del egt_children[:]
+
+    def on_parent(ppid, pid, cond):
+        global egt_constraints
+        global egt_children
+        egt_constraints.append(ppid, pid, cond)
+        egt_children.append(pid)
+
     """
     return dedent(tmpl)
 
 def epilogue_tmpl():
     tmpl = """
     for i in egt_children:
-      print "wait child %i" % i
-      os.waitpid(i, 0)
+        if i != os.getpid():
+          print "wait child %i" % i
+          os.waitpid(i, 0)
     """
     return dedent(tmpl)
 
@@ -48,20 +62,18 @@ def if_tmpl(cond, body, orelse):
     # get all variables in egt_constraints and make sure that the labels are correct
     # from egt_defined_vars
     if pid == 0:
-        egt_constraints.append(os.getpid(), pid, "cond")
-        egt_pids.append(os.getpid())
+        on_child(os.getpid(), pid, "cond")
         body
     else:
-        egt_constraints.append(os.getpid(), pid, "notcond")
-        egt_children.append(pid)
+        on_parent(os.getpid(), pid, "cond")
         orelse
     """
-    ast = parse(dedent(tmpl))
-    ast.body[1].body[2] = body
-    ast.body[1].body[0].value.args[2].s = astunparse.unparse(cond).strip()
-    ast.body[1].orelse[2] = orelse
-    ast.body[1].orelse[0].value.args[2].s =  "not " + astunparse.unparse(cond).strip()
-    return ast
+    myast = parse(dedent(tmpl))
+    myast.body[1].body[1] = body
+    myast.body[1].body[0].value.args[2].s = astunparse.unparse(cond).strip()
+    myast.body[1].orelse[1] = orelse
+    myast.body[1].orelse[0].value.args[2].s =  "not " + astunparse.unparse(cond).strip()
+    return fix_missing_locations(myast)
 
 
 def assign_tmpl(target, value):
@@ -89,6 +101,7 @@ def loop_tmpl(cond, body, orelse):
 
 class EgtTransformer(NodeTransformer):
     def visit_If(self, node):
+        self.generic_visit(node)
         ifcond = node.test
         ifbody = node.body
         elbody = node.orelse
