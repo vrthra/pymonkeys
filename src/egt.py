@@ -3,15 +3,6 @@ import ast
 import astunparse
 import signal
 import collections
-class Constraints:
-    def __init__(self):
-        self.constraints = []
-
-    def append(self, cond):
-        self.constraints.append(cond)
-
-    def show(self):
-        return " & ".join(self.constraints)
 
 class UpdateName(ast.NodeTransformer):
     def __init__(self, egt):
@@ -25,7 +16,7 @@ class UpdateName(ast.NodeTransformer):
 
 class Egt():
     def __init__(self):
-        self.constraints = Constraints()
+        self.constraints = []
         self.children = []
         self.mypid = os.getpid()
         self.defined_vars = collections.defaultdict(int)
@@ -39,6 +30,14 @@ class Egt():
     def on_parent(self, pid, cond):
         self.constraints.append(self.update_vars(cond))
         self.children.append(pid)
+
+    def fork(self, cond):
+        pid = os.fork()
+        if pid == 0:
+            self.on_child(cond)
+        else:
+            self.on_parent(pid, "not %s" % cond)
+        return pid
 
     def update_vars(self, src):
         value = ast.parse(src)
@@ -56,9 +55,12 @@ class Egt():
         target_var = "%s:%d" % (target, self.defined_vars[target])
         self.constraints.append(target_var + " == " + target_value)
 
+    def show_constraints(self):
+        return " & ".join(self.constraints)
+
     def epilogue(self):
         with open(".pids/%d" % self.mypid, "w+") as f:
-	    f.write(self.constraints.show())
+	    f.write(self.show_constraints())
         for pid in self.children:
 	    os.waitpid(pid, 0)
 

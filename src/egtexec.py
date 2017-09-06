@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import sys
 from textwrap import dedent
-import os
 import ast
 import astunparse
 
@@ -10,19 +9,17 @@ def slurp(src):
 
 def if_tmpl(cond, body, orelse):
     tmpl = """
-    pid = os.fork()
+    pid = egt.fork('%s')
     if pid == 0:
-        egt.on_child('{cond}')
         body
     else:
-        egt.on_parent(pid, 'not {cond}')
         orelse
     """
     condsrc =  astunparse.unparse(cond).strip()
-    myast = ast.parse(dedent(tmpl.format(cond=condsrc)))
+    myast = ast.parse(dedent(tmpl % condsrc))
     ifbody = myast.body[1]
-    ifbody.body[1] = body
-    ifbody.orelse[1] = orelse
+    ifbody.body[0] = body
+    ifbody.orelse[0] = orelse
 
     return ast.fix_missing_locations(myast)
 
