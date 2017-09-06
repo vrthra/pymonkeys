@@ -32,7 +32,7 @@ def assign_tmpl(target, value):
     tmpl = """
     value = None
     if '{value}' != 'input()':
-    	value = eval(egt.labelize('{value}'))
+        value = eval(egt.labelize('{value}'))
     name = egt.new_label('{name}')
     if not value: value = egt.symbolic(name)
     v[name] = value
