@@ -21,7 +21,7 @@ def prologue_tmpl():
 
 def epilogue_tmpl():
     tmpl = """
-    egt.theend()
+    egt.epilogue()
     """
     return dedent(tmpl)
 
@@ -47,20 +47,11 @@ def if_tmpl(cond, body, orelse):
     return fix_missing_locations(myast)
 
 def assign_tmpl(target, value):
+    # TODO: make sure that egt_defined_vars are reinitialized at the start of each block
     # Make sure that the target is suitably renamed.
-    # make sure that egt_defined_vars are reinitialized at the start of each block
-    target_name = target.id
-
     tmpl = """
-    newvar = 1
-    egt_target = '{target_name}'
-    if (egt_target in egt.defined_vars.keys()): newvar = egt.defined_vars[egt_target] + 1
-    egt_target_value = egt.update_vars('{target_value}')
-    egt.defined_vars[egt_target] = newvar
-    egt_target_label = egt_target + ':' + str(newvar)
-    egt.constraints.append(egt_target_label + " == " + egt_target_value)
-    """.format(target_name=target_name,
-         target_value = astunparse.unparse(value).strip())
+    egt.on_assignment('{target_name}', '{target_value}')
+    """.format(target_name=target.id, target_value = astunparse.unparse(value).strip())
     myast = parse(dedent(tmpl))
     return fix_missing_locations(myast)
 

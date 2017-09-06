@@ -2,6 +2,7 @@ import os
 import ast
 import astunparse
 import signal
+import collections
 class Constraints:
     def __init__(self):
         self.constraints = []
@@ -27,7 +28,7 @@ class Egt():
         self.constraints = Constraints()
         self.children = []
         self.mypid = os.getpid()
-        self.defined_vars = {}
+        self.defined_vars = collections.defaultdict(int)
         self.name_trans = UpdateName(self)
 
     def on_child(self, cond):
@@ -43,7 +44,19 @@ class Egt():
         value = ast.parse(src)
         return astunparse.unparse(self.name_trans.visit(value)).strip()
 
-    def theend(self):
+    def on_assignment(self, target, target_value):
+        # walk the value first to ensure that all variable references are
+        # correctly converted to variable:label references.
+        target_value = self.update_vars(target_value)
+
+        # now update the reference. If you do this before the previous walk, you
+        # will find that the target_value contains referenes to current label
+        self.defined_vars[target] += 1
+
+        target_var = "%s:%d" % (target, self.defined_vars[target])
+        self.constraints.append(target_var + " == " + target_value)
+
+    def epilogue(self):
         with open(".pids/%d" % self.mypid, "w+") as f:
 	    f.write(self.constraints.show())
         for pid in self.children:
