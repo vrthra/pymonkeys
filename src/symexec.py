@@ -61,10 +61,11 @@ class EgtTransformer(ast.NodeTransformer):
         return assign_tmpl(node.targets[0], node.value)
 
 def transform(tree):
-    return EgtTransformer().visit(tree)
+    newtree = transformers.ParentChildNodeTransformer().visit(tree)
+    return EgtTransformer().visit(newtree)
 
 def main(src):
-    tree = transformers.ParentChildNodeTransformer().visit(ast.parse(slurp(src)))
+    tree = ast.parse(slurp(src))
     tmpl = """
     import os
     import egt
