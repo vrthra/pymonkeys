@@ -3,23 +3,26 @@ import sys
 from textwrap import dedent
 import ast
 import astunparse
+from astmonkey import transformers
 
 def slurp(src):
     with open(src) as x: return x.read()
 
 def if_tmpl(cond, body, orelse):
     tmpl = """
-    pid = egt.fork('%s')
+    pid = egt.fork()
     if pid == 0:
+        egt.solver.add(eval(egt.labelize('{cond}')))
         body
     else:
+        egt.solver.add(eval('z3.Not%s' % egt.labelize('{cond}')))
         orelse
     """
     condsrc =  astunparse.unparse(cond).strip()
-    myast = ast.parse(dedent(tmpl % condsrc))
+    myast = ast.parse(dedent(tmpl.format(cond=condsrc)))
     ifbody = myast.body[1]
-    ifbody.body[0] = body
-    ifbody.orelse[0] = orelse
+    ifbody.body[1] = body
+    ifbody.orelse[1] = orelse
 
     return ast.fix_missing_locations(myast)
 
@@ -27,8 +30,14 @@ def assign_tmpl(target, value):
     # TODO: make sure that egt_defined_vars are reinitialized at the start of each block
     # Make sure that the target is suitably renamed.
     tmpl = """
-    egt.on_assignment('{target_name}', '{target_value}')
-    """.format(target_name=target.id, target_value = astunparse.unparse(value).strip())
+    value = None
+    if '{value}' != 'input()':
+    	value = eval(egt.labelize('{value}'))
+    name = egt.new_label('{name}')
+    if not value: value = egt.symbolic(name)
+    v[name] = value
+    egt.solver.add(v[name] == value)
+    """.format(name=target.id, value = astunparse.unparse(value).strip())
     myast = ast.parse(dedent(tmpl))
     return ast.fix_missing_locations(myast)
 
@@ -54,15 +63,17 @@ class EgtTransformer(ast.NodeTransformer):
 def transform(tree):
     return EgtTransformer().visit(tree)
 
-def main():
-    tree = ast.parse(slurp(sys.argv[1]))
+def main(src):
+    tree = transformers.ParentChildNodeTransformer().visit(ast.parse(slurp(src)))
     tmpl = """
     import os
     import egt
+    import z3
     egt = egt.Egt()
+    v = {}
     %s
     egt.epilogue()
     """
     print dedent(tmpl) % astunparse.unparse(transform(tree))
 
-main()
+main(sys.argv[1])

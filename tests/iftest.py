@@ -1,5 +1,5 @@
-x = 100
-y = 100
+x = input()
+y = input()
 if x > 1:
     if y < 2:
         print "1"
