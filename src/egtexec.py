@@ -11,9 +11,6 @@ def slurp(src):
 def prologue_tmpl():
     tmpl = """
     import os
-    import ast
-    import astunparse
-    import signal
     import egt
     egt = egt.Egt()
     """
