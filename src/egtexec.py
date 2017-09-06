@@ -2,46 +2,29 @@
 import sys
 from textwrap import dedent
 import os
-from ast import *
+import ast
 import astunparse
 
 def slurp(src):
     with open(src) as x: return x.read()
 
-def prologue_tmpl():
-    tmpl = """
-    import os
-    import egt
-    egt = egt.Egt()
-    """
-    return dedent(tmpl)
-
-def epilogue_tmpl():
-    tmpl = """
-    egt.epilogue()
-    """
-    return dedent(tmpl)
-
-
 def if_tmpl(cond, body, orelse):
     tmpl = """
-    parentpid = egt.mypid
     pid = os.fork()
-    # get all variables in egt_constraints and make sure that the labels are correct
-    # from egt_defined_vars
     if pid == 0:
-        egt.on_child("cond")
+        egt.on_child('{cond}')
         body
     else:
-        egt.on_parent(pid, "cond")
+        egt.on_parent(pid, 'not {cond}')
         orelse
     """
-    myast = parse(dedent(tmpl))
-    myast.body[2].body[1] = body
-    myast.body[2].body[0].value.args[0].s = astunparse.unparse(cond).strip()
-    myast.body[2].orelse[1] = orelse
-    myast.body[2].orelse[0].value.args[1].s =  "not " + astunparse.unparse(cond).strip()
-    return fix_missing_locations(myast)
+    condsrc =  astunparse.unparse(cond).strip()
+    myast = ast.parse(dedent(tmpl.format(cond=condsrc)))
+    ifbody = myast.body[1]
+    ifbody.body[1] = body
+    ifbody.orelse[1] = orelse
+
+    return ast.fix_missing_locations(myast)
 
 def assign_tmpl(target, value):
     # TODO: make sure that egt_defined_vars are reinitialized at the start of each block
@@ -49,8 +32,8 @@ def assign_tmpl(target, value):
     tmpl = """
     egt.on_assignment('{target_name}', '{target_value}')
     """.format(target_name=target.id, target_value = astunparse.unparse(value).strip())
-    myast = parse(dedent(tmpl))
-    return fix_missing_locations(myast)
+    myast = ast.parse(dedent(tmpl))
+    return ast.fix_missing_locations(myast)
 
 def loop_tmpl(cond, body, orelse):
     """
@@ -62,29 +45,27 @@ def loop_tmpl(cond, body, orelse):
         orelse
     """
 
-
-class EgtTransformer(NodeTransformer):
+class EgtTransformer(ast.NodeTransformer):
     def visit_If(self, node):
         self.generic_visit(node)
-        ifcond = node.test
-        ifbody = node.body
-        elbody = node.orelse
-        # first we fork, and check the pid
-        newnode = if_tmpl(ifcond, ifbody, elbody)
-        return newnode
+        return if_tmpl(node.test, node.body, node.orelse)
 
     def visit_Assign(self, node):
         self.generic_visit(node)
-        newnode = assign_tmpl(node.targets[0], node.value)
-        return newnode
+        return assign_tmpl(node.targets[0], node.value)
 
 def transform(tree):
     return EgtTransformer().visit(tree)
 
 def main():
-    tree = parse(slurp(sys.argv[1]))
-    #print astunparse.dump(tree)
-    print prologue_tmpl() + astunparse.unparse(transform(tree)) + epilogue_tmpl()
-    #print dump(transform(tree))
+    tree = ast.parse(slurp(sys.argv[1]))
+    tmpl = """
+    import os
+    import egt
+    egt = egt.Egt()
+    %s
+    egt.epilogue()
+    """
+    print dedent(tmpl) % astunparse.unparse(transform(tree))
 
 main()
