@@ -73,6 +73,9 @@ class PreLoopTransformer(ast.NodeTransformer):
         return self.while_tmpl(node.test, node.body, node.orelse)
 
 def transform(tree):
+    # Hack warning: The tree nodes inserted by loop replacement is not
+    # visited by the EgtTransformer unless converted back into source and
+    # reconverted.
     tree = ast.parse(astunparse.unparse(PreLoopTransformer().visit(tree)))
     tree = transformers.ParentChildNodeTransformer().visit(tree)
     tree = EgtTransformer().visit(tree)
