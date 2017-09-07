@@ -1,6 +1,6 @@
-iftest:
+%:
 	rm -rf .pids/*
-	python ./src/symexec.py tests/iftest.py > x.py
+	python ./src/symexec.py tests/$*.py > x.py
 	python x.py
 	for i in .pids/*; do echo $$i `cat $$i`; done
 

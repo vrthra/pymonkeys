@@ -30,11 +30,7 @@ def assign_tmpl(target, value):
     # TODO: make sure that egt_defined_vars are reinitialized at the start of each block
     # Make sure that the target is suitably renamed.
     tmpl = """
-    value = None
-    if '{value}' != 'input()':
-        value = eval(egt.labelize('{value}'))
-    name = egt.new_label('{name}')
-    if not value: value = egt.symbolic(name)
+    (name, value) = egt.on_assign('{name}', '{value}', globals(), locals())
     v[name] = value
     egt.solver.add(v[name] == value)
     """.format(name=target.id, value = astunparse.unparse(value).strip())
