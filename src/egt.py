@@ -33,22 +33,21 @@ class Egt():
         self.name_trans = UpdateName(self)
         self.solver = Solver()
 
+    def tmpeval(self, cond, g_state, l_state):
+        self.solver.push() # commit point
+        self.solver.add(eval(cond, g_state, l_state))
+        condres = self.sat()
+        self.solver.pop()
+        return condres
+
     def fork(self, cond, g_state, l_state):
-        self.solver.push() # commit point
-        self.solver.add(eval(self.labelize(cond), g_state, l_state))
-        ifcond = self.sat()
-        self.solver.pop()
-
-        if ifcond == None: return -1
+        ifcond = self.tmpeval(self.labelize(cond), g_state, l_state)
         # The condition option is unsatisfiable. No point in forking a child.
+        if ifcond == None: return -1
 
-        self.solver.push() # commit point
-        self.solver.add(eval('z3.Not%s' % self.labelize(cond), g_state, l_state))
-        ifnotcond = self.sat()
-        self.solver.pop()
-
-        if ifnotcond == None: return 0
+        ifnotcond = self.tmpeval('z3.Not%s' % self.labelize(cond), g_state, l_state)
         # The not condition option is unsatisfiable. No point in forking a child.
+        if ifnotcond == None: return 0
 
         pid = os.fork()
         if pid == 0:
