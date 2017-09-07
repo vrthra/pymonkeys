@@ -73,7 +73,6 @@ class Egt():
         else:
             return None
 
-
     def on_assign(self, name, value, g_state, l_state):
         newvalue = None
         if value != 'input()':

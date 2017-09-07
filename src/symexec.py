@@ -10,7 +10,11 @@ def slurp(src):
 
 class EgtTransformer(ast.NodeTransformer):
 
-    def if_tmpl(self, cond, body, orelse):
+    def visit_If(self, node):
+        self.generic_visit(node)
+        cond = node.test
+        body = node.body
+        orelse = node.orelse
         tmpl = """
         pid = myegt.fork()
         if pid == 0:
@@ -25,10 +29,12 @@ class EgtTransformer(ast.NodeTransformer):
         ifbody = myast.body[1]
         ifbody.body[1] = body
         ifbody.orelse[1] = orelse
-
         return ast.fix_missing_locations(myast)
 
-    def assign_tmpl(self, target, value):
+    def visit_Assign(self, node):
+        self.generic_visit(node)
+        target = node.targets[0]
+        value = node.value
         # TODO: make sure that egt_defined_vars are reinitialized at the start of each block
         # Make sure that the target is suitably renamed.
         tmpl = """
@@ -36,25 +42,15 @@ class EgtTransformer(ast.NodeTransformer):
         v[name] = value
         myegt.solver.add(v[name] == value)
         """.format(name=target.id, value = astunparse.unparse(value).strip())
-        myast = ast.parse(dedent(tmpl))
-        return ast.fix_missing_locations(myast)
-
-    def visit_If(self, node):
-        self.generic_visit(node)
-        return self.if_tmpl(node.test, node.body, node.orelse)
-
-    def visit_Assign(self, node):
-        self.generic_visit(node)
-        return self.assign_tmpl(node.targets[0], node.value)
+        return ast.fix_missing_locations(ast.parse(dedent(tmpl)))
 
     def visit_Print(self, node):
         self.generic_visit(node)
+        if isinstance(node.values[0], ast.Str): return node
         tmpl = """
         print myegt.on_print('{value}', globals(), locals())
         """.format(value = astunparse.unparse(node.values[0]).strip())
-        myast = ast.parse(dedent(tmpl))
-        myast = ast.fix_missing_locations(myast)
-        return myast
+        return ast.fix_missing_locations(ast.parse(dedent(tmpl)))
 
 class PreLoopTransformer(ast.NodeTransformer):
     def while_tmpl(self, cond, body, orelse):
