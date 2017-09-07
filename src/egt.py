@@ -33,7 +33,23 @@ class Egt():
         self.name_trans = UpdateName(self)
         self.solver = Solver()
 
-    def fork(self):
+    def fork(self, cond, g_state, l_state):
+        self.solver.push() # commit point
+        self.solver.add(eval(self.labelize(cond), g_state, l_state))
+        ifcond = self.sat()
+        self.solver.pop()
+
+        if ifcond == None: return -1
+        # The condition option is unsatisfiable. No point in forking a child.
+
+        self.solver.push() # commit point
+        self.solver.add(eval('z3.Not%s' % self.labelize(cond), g_state, l_state))
+        ifnotcond = self.sat()
+        self.solver.pop()
+
+        if ifnotcond == None: return 0
+        # The not condition option is unsatisfiable. No point in forking a child.
+
         pid = os.fork()
         if pid == 0:
             # chid -- update our pid, and reset

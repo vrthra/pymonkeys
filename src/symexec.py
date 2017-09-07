@@ -16,7 +16,7 @@ class EgtTransformer(ast.NodeTransformer):
         body = node.body
         orelse = node.orelse
         tmpl = """
-        pid = myegt.fork()
+        pid = myegt.fork('{cond}', globals(), locals())
         if pid == 0:
             myegt.solver.add(eval(myegt.labelize('{cond}')))
             body
