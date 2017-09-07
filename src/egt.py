@@ -6,6 +6,7 @@ import collections
 from astmonkey import transformers
 
 from z3 import *
+Maxiter = 10
 
 class UpdateName(ast.NodeTransformer):
     def __init__(self, egt):
@@ -32,7 +33,6 @@ class Egt():
         self.defined_vars = collections.defaultdict(int)
         self.name_trans = UpdateName(self)
         self.solver = Solver()
-        self.itermax = 10
 
     def fork(self):
         pid = os.fork()
@@ -74,9 +74,6 @@ class Egt():
         else:
             return None
 
-    def maxiter(self):
-        self.itermax -= 1
-        return self.itermax > 0
 
     def on_assign(self, name, value, g_state, l_state):
         newvalue = None
@@ -85,4 +82,5 @@ class Egt():
         name = self.new_label(name)
         if not newvalue: newvalue = self.symbolic(name)
         return (name, newvalue)
+
 

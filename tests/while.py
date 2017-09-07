@@ -1,6 +1,5 @@
 x = input()
-y = 10
-while y > 4:
-   print x
-   y = y - 1
+while x > 1 and x < 3:
+   print 0
+   x = x - 1
 
