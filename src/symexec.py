@@ -41,15 +41,30 @@ def assign_tmpl(target, value):
     myast = ast.parse(dedent(tmpl))
     return ast.fix_missing_locations(myast)
 
-def loop_tmpl(cond, body, orelse):
+def while_tmpl(cond, body, orelse):
+    if orelse != []: raise Exception("Cant handle while:else")
+    tmpl = """
+    # Translate each loop to a while sat loop
+    while egt.sat():
+        if egt.maxiter(): break
+        pid = egt.fork()
+        if pid == 0:
+            egt.solver.add(eval(egt.labelize('{cond}')))
+            body
+        else:
+            egt.solver.add(eval('z3.Not%s' % egt.labelize('{cond}')))
+            orelse
+            break
     """
-    # Translate each loop to a while True loop
-    while True:
-        if cond: break
-        body
-    else:
-        orelse
-    """
+    condsrc =  astunparse.unparse(cond).strip()
+    myast = ast.parse(dedent(tmpl.format(cond=condsrc)))
+    whilebody = myast.body[0]
+    ifbody = whilebody.body[2]
+    ifbody.body[1] = body
+    ifbody.orelse[1] = orelse
+
+    return ast.fix_missing_locations(whilebody)
+
 
 class EgtTransformer(ast.NodeTransformer):
     def visit_If(self, node):
@@ -59,6 +74,12 @@ class EgtTransformer(ast.NodeTransformer):
     def visit_Assign(self, node):
         self.generic_visit(node)
         return assign_tmpl(node.targets[0], node.value)
+
+    def visit_While(self, node):
+        self.generic_visit(node)
+        cond = node.test
+        whilebody = node.body
+        return while_tmpl(node.test, node.body, node.orelse)
 
 def transform(tree):
     newtree = transformers.ParentChildNodeTransformer().visit(tree)
