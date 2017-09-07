@@ -46,9 +46,9 @@ class Egt():
 
     def epilogue(self):
         with open(".pids/%d" % self.mypid, "w+") as f:
-	    f.write(str(self.sat()))
+            f.write(str(self.sat()))
         for pid in self.waitfor:
-	    os.waitpid(pid, 0)
+            os.waitpid(pid, 0)
 
 
     def new_label(self, name):
