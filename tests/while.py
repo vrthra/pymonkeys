@@ -1,5 +1,5 @@
 x = input()
 while x > 1:
-   print 0
+   print x
    x = x - 1
 

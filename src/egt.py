@@ -15,7 +15,6 @@ class UpdateName(ast.NodeTransformer):
     def visit_Name(self, node):
         self.generic_visit(node)
         if isinstance(node.parent, ast.Call):
-            print ast.dump(node.parent)
             return node
         tmpl = "v['x:1']"
         srcast = ast.parse(tmpl).body[0].value
@@ -83,4 +82,6 @@ class Egt():
         if not newvalue: newvalue = self.symbolic(name)
         return (name, newvalue)
 
-
+    def on_print(self, values, g_state, l_state):
+        newvalues = [eval(self.labelize(v), g_state, l_state) for v in values]
+        return newvalues

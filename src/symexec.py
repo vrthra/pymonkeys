@@ -8,43 +8,53 @@ from astmonkey import transformers
 def slurp(src):
     with open(src) as x: return x.read()
 
-def if_tmpl(cond, body, orelse):
-    tmpl = """
-    pid = myegt.fork()
-    if pid == 0:
-        myegt.solver.add(eval(myegt.labelize('{cond}')))
-        body
-    else:
-        myegt.solver.add(eval('z3.Not%s' % myegt.labelize('{cond}')))
-        orelse
-    """
-    condsrc =  astunparse.unparse(cond).strip()
-    myast = ast.parse(dedent(tmpl.format(cond=condsrc)))
-    ifbody = myast.body[1]
-    ifbody.body[1] = body
-    ifbody.orelse[1] = orelse
-
-    return ast.fix_missing_locations(myast)
-
-def assign_tmpl(target, value):
-    # TODO: make sure that egt_defined_vars are reinitialized at the start of each block
-    # Make sure that the target is suitably renamed.
-    tmpl = """
-    (name, value) = myegt.on_assign('{name}', '{value}', globals(), locals())
-    v[name] = value
-    myegt.solver.add(v[name] == value)
-    """.format(name=target.id, value = astunparse.unparse(value).strip())
-    myast = ast.parse(dedent(tmpl))
-    return ast.fix_missing_locations(myast)
-
 class EgtTransformer(ast.NodeTransformer):
+
+    def if_tmpl(self, cond, body, orelse):
+        tmpl = """
+        pid = myegt.fork()
+        if pid == 0:
+            myegt.solver.add(eval(myegt.labelize('{cond}')))
+            body
+        else:
+            myegt.solver.add(eval('z3.Not%s' % myegt.labelize('{cond}')))
+            orelse
+        """
+        condsrc =  astunparse.unparse(cond).strip()
+        myast = ast.parse(dedent(tmpl.format(cond=condsrc)))
+        ifbody = myast.body[1]
+        ifbody.body[1] = body
+        ifbody.orelse[1] = orelse
+
+        return ast.fix_missing_locations(myast)
+
+    def assign_tmpl(self, target, value):
+        # TODO: make sure that egt_defined_vars are reinitialized at the start of each block
+        # Make sure that the target is suitably renamed.
+        tmpl = """
+        (name, value) = myegt.on_assign('{name}', '{value}', globals(), locals())
+        v[name] = value
+        myegt.solver.add(v[name] == value)
+        """.format(name=target.id, value = astunparse.unparse(value).strip())
+        myast = ast.parse(dedent(tmpl))
+        return ast.fix_missing_locations(myast)
+
     def visit_If(self, node):
         self.generic_visit(node)
-        return if_tmpl(node.test, node.body, node.orelse)
+        return self.if_tmpl(node.test, node.body, node.orelse)
 
     def visit_Assign(self, node):
         self.generic_visit(node)
-        return assign_tmpl(node.targets[0], node.value)
+        return self.assign_tmpl(node.targets[0], node.value)
+
+    def visit_Print(self, node):
+        self.generic_visit(node)
+        tmpl = """
+        print myegt.on_print('{value}', globals(), locals())
+        """.format(value = astunparse.unparse(node.values[0]).strip())
+        myast = ast.parse(dedent(tmpl))
+        myast = ast.fix_missing_locations(myast)
+        return myast
 
 class PreLoopTransformer(ast.NodeTransformer):
     def while_tmpl(self, cond, body, orelse):
