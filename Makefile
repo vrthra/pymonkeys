@@ -7,3 +7,8 @@
 clean:
 	rm -rf .pids/
 	mkdir -p .pids
+
+pudb-%:
+	python -mpudb ./src/symexec.py tests/$*.py
+ipdb-%:
+	python -mipdb ./src/symexec.py tests/$*.py

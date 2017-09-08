@@ -11,56 +11,40 @@ def slurp(src):
 class EgtTransformer(ast.NodeTransformer):
 
     def visit_If(self, node):
-        self.generic_visit(node)
-        cond = node.test
-        body = node.body
-        orelse = node.orelse
         tmpl = """
-        pid = myegt.fork('{cond}', globals(), locals())
-        if pid == 0:
+        if myegt.fork('{cond}', globals(), locals()) == 0:
             myegt.solver.add(eval(myegt.labelize('{cond}')))
-            body
         else:
             myegt.solver.add(eval('z3.Not%s' % myegt.labelize('{cond}')))
-            orelse
         """
-        condsrc =  astunparse.unparse(cond).strip()
-        myast = ast.parse(dedent(tmpl.format(cond=condsrc)))
-        ifbody = myast.body[1]
-        ifbody.body[1] = body
-        ifbody.orelse[1] = orelse
-        return ast.copy_location(myast, node)
+        condsrc =  astunparse.unparse(node.test).strip()
+        ifstmt = ast.parse(dedent(tmpl.format(cond=condsrc))).body[0]
+
+        ifstmt.body.extend(node.body)
+        ifstmt.orelse.extend(node.orelse)
+        ifstmt = ast.fix_missing_locations(ast.copy_location(ifstmt, node))
+        return self.generic_visit(ifstmt)
 
     def visit_Assign(self, node):
-        self.generic_visit(node)
-        target = node.targets[0]
-        value = node.value
         # TODO: make sure that egt_defined_vars are reinitialized at the start of each block
-        # Make sure that the target is suitably renamed.
         tmpl = """
         (name, value) = myegt.on_assign('{name}', '{value}', globals(), locals())
         v[name] = value
         myegt.solver.add(v[name] == value)
-        """.format(name=target.id, value = astunparse.unparse(value).strip())
+        """.format(name=node.targets[0].id,
+                   value = astunparse.unparse(node.value).strip())
         return ast.fix_missing_locations(ast.copy_location(ast.parse(dedent(tmpl)), node))
 
     def visit_Print(self, node):
-        self.generic_visit(node)
+        # self.generic_visit(node)
         if isinstance(node.values[0], ast.Str): return node
         tmpl = """
         print myegt.on_print('{value}', globals(), locals())
         """.format(value = astunparse.unparse(node.values[0]).strip())
         return ast.fix_missing_locations(ast.copy_location(ast.parse(dedent(tmpl)), node))
 
-class PreLoopTransformer(ast.NodeTransformer):
-
     def visit_While(self, node):
-        self.generic_visit(node)
-
-        cond = node.test
-        body = node.body
-        orelse = node.orelse
-        if orelse != []: raise Exception("Cant handle while:else")
+        if node.orelse != []: raise Exception("Cant handle while:else")
         # Translate each loop to a while sat loop
         tmpl = """
         for i in range(0, egt.Maxiter):
@@ -70,21 +54,17 @@ class PreLoopTransformer(ast.NodeTransformer):
                 orelse
                 break
         """
-        condsrc =  astunparse.unparse(cond).strip()
-        myast = ast.parse(dedent(tmpl.format(cond=condsrc)))
-        fornode = myast.body[0]
+        condsrc =  astunparse.unparse(node.test).strip()
+        fornode = ast.parse(dedent(tmpl.format(cond=condsrc))).body[0]
+
         ifnode = fornode.body[0]
-        ifnode.body[0] = body
-        ifnode.orelse[0] = orelse
-
+        ifnode.body = node.body
+        ifnode.orelse = node.orelse
+        fornode.body[0] = self.visit(ifnode)
         return ast.fix_missing_locations(ast.copy_location(fornode, node))
-
 
 def symbolic_transform(src):
     return astunparse.unparse(EgtTransformer().visit(ast.parse(src)))
-
-def loop_preprocess(src):
-    return astunparse.unparse(PreLoopTransformer().visit(ast.parse(src)))
 
 def main(fname):
     tmpl = """
@@ -96,10 +76,6 @@ def main(fname):
     %s
     myegt.epilogue()
     """
-    # Hack warning: The tree nodes inserted by loop replacement is not
-    # visited by the EgtTransformer unless converted back into source and
-    # reconverted.
-    preprocessed = loop_preprocess(slurp(fname))
-    print dedent(tmpl) % symbolic_transform(preprocessed)
+    print dedent(tmpl) % symbolic_transform(slurp(fname))
 
 main(sys.argv[1])
