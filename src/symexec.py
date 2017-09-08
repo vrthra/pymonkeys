@@ -29,7 +29,7 @@ class EgtTransformer(ast.NodeTransformer):
         ifbody = myast.body[1]
         ifbody.body[1] = body
         ifbody.orelse[1] = orelse
-        return ast.fix_missing_locations(myast)
+        return ast.copy_location(myast, node)
 
     def visit_Assign(self, node):
         self.generic_visit(node)
@@ -42,7 +42,7 @@ class EgtTransformer(ast.NodeTransformer):
         v[name] = value
         myegt.solver.add(v[name] == value)
         """.format(name=target.id, value = astunparse.unparse(value).strip())
-        return ast.fix_missing_locations(ast.parse(dedent(tmpl)))
+        return ast.fix_missing_locations(ast.copy_location(ast.parse(dedent(tmpl)), node))
 
     def visit_Print(self, node):
         self.generic_visit(node)
@@ -50,13 +50,19 @@ class EgtTransformer(ast.NodeTransformer):
         tmpl = """
         print myegt.on_print('{value}', globals(), locals())
         """.format(value = astunparse.unparse(node.values[0]).strip())
-        return ast.fix_missing_locations(ast.parse(dedent(tmpl)))
+        return ast.fix_missing_locations(ast.copy_location(ast.parse(dedent(tmpl)), node))
 
 class PreLoopTransformer(ast.NodeTransformer):
-    def while_tmpl(self, cond, body, orelse):
+
+    def visit_While(self, node):
+        self.generic_visit(node)
+
+        cond = node.test
+        body = node.body
+        orelse = node.orelse
         if orelse != []: raise Exception("Cant handle while:else")
-        tmpl = """
         # Translate each loop to a while sat loop
+        tmpl = """
         for i in range(0, egt.Maxiter):
             if {cond}:
                 body
@@ -71,24 +77,16 @@ class PreLoopTransformer(ast.NodeTransformer):
         ifnode.body[0] = body
         ifnode.orelse[0] = orelse
 
-        return ast.fix_missing_locations(fornode)
+        return ast.fix_missing_locations(ast.copy_location(fornode, node))
 
 
-    def visit_While(self, node):
-        self.generic_visit(node)
-        return self.while_tmpl(node.test, node.body, node.orelse)
+def symbolic_transform(src):
+    return astunparse.unparse(EgtTransformer().visit(ast.parse(src)))
 
-def transform(tree):
-    # Hack warning: The tree nodes inserted by loop replacement is not
-    # visited by the EgtTransformer unless converted back into source and
-    # reconverted.
-    tree = ast.parse(astunparse.unparse(PreLoopTransformer().visit(tree)))
-    tree = transformers.ParentChildNodeTransformer().visit(tree)
-    tree = EgtTransformer().visit(tree)
-    return tree
+def loop_preprocess(src):
+    return astunparse.unparse(PreLoopTransformer().visit(ast.parse(src)))
 
-def main(src):
-    tree = ast.parse(slurp(src))
+def main(fname):
     tmpl = """
     import os
     import egt
@@ -98,6 +96,10 @@ def main(src):
     %s
     myegt.epilogue()
     """
-    print dedent(tmpl) % astunparse.unparse(transform(tree))
+    # Hack warning: The tree nodes inserted by loop replacement is not
+    # visited by the EgtTransformer unless converted back into source and
+    # reconverted.
+    preprocessed = loop_preprocess(slurp(fname))
+    print dedent(tmpl) % symbolic_transform(preprocessed)
 
 main(sys.argv[1])
