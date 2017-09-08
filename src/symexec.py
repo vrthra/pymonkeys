@@ -29,8 +29,8 @@ class EgtTransformer(ast.NodeTransformer):
         # TODO: make sure that egt_defined_vars are reinitialized at the start of each block
         tmpl = """
         (name, value) = myegt.on_assign('{name}', '{value}', globals(), locals())
-        v[name] = value
-        myegt.solver.add(v[name] == value)
+        egt_v[name] = value
+        myegt.solver.add(egt_v[name] == value)
         """.format(name=node.targets[0].id,
                    value = astunparse.unparse(node.value).strip())
         return ast.fix_missing_locations(ast.copy_location(ast.parse(dedent(tmpl)), node))
@@ -72,7 +72,7 @@ def main(fname):
     import egt
     import z3
     myegt = egt.Egt()
-    v = {}
+    egt_v = {}
     %s
     myegt.epilogue()
     """

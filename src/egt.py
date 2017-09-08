@@ -16,7 +16,7 @@ class UpdateName(ast.NodeTransformer):
         self.generic_visit(node)
         if isinstance(node.parent, ast.Call):
             return node
-        tmpl = "v['x:1']"
+        tmpl = "egt_v['x:1']"
         srcast = ast.parse(tmpl).body[0].value
         label = node.id
         if label in self.egt.defined_vars:
@@ -76,7 +76,7 @@ class Egt():
     def labelize(self, src):
         """
         replace x + 1
-        with    v['x:1'] + 1
+        with    egt_v['x:1'] + 1
         """
         node = ast.parse(src)
         value = transformers.ParentChildNodeTransformer().visit(node)
