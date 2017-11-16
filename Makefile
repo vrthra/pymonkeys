@@ -1,14 +1,24 @@
-%:
+MAKEFLAGS += --no-builtin-rules
+.SUFFIXES:
+
+.PRECIOUS: .symbolic/%.py
+
+%.sym: .symbolic/%.py | .symbolic .pids
 	rm -rf .pids/*
-	python ./src/symexec.py tests/$*.py > x.py
-	python x.py
+	python3 .symbolic/$*.py
 	for i in .pids/*; do echo $$i `cat $$i`; done
 
+
+.symbolic/%.py: tests/%.py | .symbolic
+	python3 ./src/symexec.py tests/$*.py > .symbolic/$*.py
+
 clean:
-	rm -rf .pids/
-	mkdir -p .pids
+	rm -rf .pids/ .symbolic
+
+.symbolic:; mkdir -p .symbolic
+.pids:; mkdir -p .pids
 
 pudb-%:
-	python -mpudb ./src/symexec.py tests/$*.py
+	python3 -mpudb ./src/symexec.py tests/$*.py
 ipdb-%:
-	python -mipdb ./src/symexec.py tests/$*.py
+	python3 -mipdb ./src/symexec.py tests/$*.py

@@ -1,6 +1,6 @@
 x = input()
 if x > 1:
-    print "Here"
+    print("Here")
 else:
-    print "There"
+    print("There")
 
